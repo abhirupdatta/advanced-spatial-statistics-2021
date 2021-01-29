@@ -35,6 +35,7 @@ myplot(data1,"x")
 
 ### linear regression on x
 lmobj1=lm(y~x,data=data1)
+summary(lmobj1)
 data1$res=lmobj1$residuals
 
 myplot(data1,"res")
