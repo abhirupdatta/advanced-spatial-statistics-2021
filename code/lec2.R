@@ -3,6 +3,7 @@ library(MBA)
 library(fields)
 library(geoR)
 library(RColorBrewer)
+library(mgcv)
 
 ###################################################
 ### dataset 3 ###
@@ -20,15 +21,8 @@ myplot=function(tab,colname){
   
 }
 
-dev.new()
-myplot(data3,"y")
-myplot(data3,"x")
-
-
 lmobj3=lm(y~x,data=data3)
 data3$res=lmobj3$residuals
-
-myplot(data3,"res")
 
 ### empirical variograms ###
 max.dist <- 0.75*max(rdist(data3[,1:2]))
@@ -38,19 +32,10 @@ dev.new()
 vario3 <- variog(coords=data3[,1:2], data=data3$res, uvec=(seq(0, max.dist, length=bins)))
 plot(vario3,pch=16)
 
-#### adding the coordinates into the regression
-lmobj3s=lm(y~x+sx+sy,data=data3)
-data3$res2=lmobj3s$residuals
-myplot(data3,"res2")
-
-dev.new()
-vario3s <- variog(coords=data3[,1:2], data=data3$res2, uvec=(seq(0, max.dist, length=bins)))
-plot(vario3s,pch=16)
-
 ### analysis using a Gaussian Process ###
 ### spatial mle ###
 mle <- likfit(coords=data3[,1:2], data=data3[,4], trend = trend.spatial(~x,data3),
-  ini.cov.pars=c(0.12,0.25),nugget = 0.02,cov.model="exponential",nospatial=TRUE)
+  ini.cov.pars=c(0.12,0.2),nugget = 0.02,cov.model="exponential",nospatial=TRUE)
 
 mle
 
@@ -61,16 +46,6 @@ mle$BIC
 mle$nospatial$AIC
 mle$nospatial$BIC
 
-### in sample predictions ##
-sp.pred.obj <- krige.conv(coords=data3[,1:2], data=data3[,4],
-  locations=data3[,1:2],krige=krige.control(type.krige="OK",obj.model=mle,
-  trend.d=trend.spatial(~x,data3),trend.l=trend.spatial(~x,data3)))
-
-sp.pred=sp.pred.obj$predict
-dev.new()
-plot(data3$y,sp.pred)
-max(abs(data3$y - sp.pred))
-
 ### in sample predictions (signal = TRUE) ##
 sp.pred.obj <- krige.conv(coords=data3[,1:2], data=data3[,4],
   locations=data3[,1:2],krige=krige.control(type.krige="OK",obj.model=mle,
@@ -78,32 +53,18 @@ sp.pred.obj <- krige.conv(coords=data3[,1:2], data=data3[,4],
 
 sp.pred=sp.pred.obj$predict
 data3$res3=data3$y-sp.pred
-myplot(data3,"res3")
+plot(data3$y,sp.pred,xlab="true",ylab="predicted") ## scatterplot
+myplot(data3,"res3") ## residual map
 
 dev.new()
-vario3s <- variog(coords=data3[,1:2], data=data3$res3, uvec=(seq(0, max.dist, length=bins)))
-plot(vario3s,pch=16)
+vario3gp <- variog(coords=data3[,1:2], data=data3$res3, uvec=(seq(0, max.dist, length=bins)))
+plot(vario3gp,pch=16)
 
 #### comparison with splines
-library(mgcv)
 gamtp=gam(y ~ x + s(sx,sy,bs="tp"),data=data3)
 data3$restp=gamtp$residuals
 myplot(data3,"restp")
-
-gamgp=gam(y ~ x + s(sx,sy,bs="gp"),data=data3)
-data3$resgp=gamgp$residuals
-myplot(data3,"resgp")
-
-#### comparison with splines
-library(mgcv)
-gamtp=gam(y ~ x + s(sx,sy,bs="tp"),data=data3)
-data3$restp=gamtp$residuals
-myplot(data3,"restp")
-
-gamgp=gam(y ~ x + s(sx,sy,bs="gp"),data=data3)
-data3$resgp=gamgp$residuals
-myplot(data3,"resgp")
-
+AIC(gamtp)
 
 ###################################################
 ### WEF data
@@ -111,8 +72,9 @@ myplot(data3,"resgp")
 WEF.dat=read.csv("../data/WEFsmall.csv")
 
 WEF.dat$logDBH=log(WEF.dat$DBH)
+WEF.dat$Species=as.factor(WEF.dat$Species)
 
-set.seed(123)
+set.seed(1234)
 ind=sample(1:nrow(WEF.dat),100,replace=FALSE)
 
 ### holdout data to assess RMSPE ###
@@ -200,13 +162,12 @@ dev.new()
 vario.logDBH.sp.resid <- variog(coords=coords, data=logDBH.sp.resid, uvec=(seq(0, max.dist, length=bins)))
 plot(vario.logDBH.sp.resid,pch=16)
 
-
 ## model comparison ##
-mle$AIC
-mle$BIC
+round(mle$AIC)
+round(mle$BIC)
 
-mle$nospatial$AIC
-mle$nospatial$BIC
+round(mle$nospatial$AIC)
+round(mle$nospatial$BIC)
 
 ### out of sample predictions ###
 ### RMSPE ###
@@ -220,8 +181,8 @@ rmspe_spatial=sqrt(mean((pred_spatial-WEF.out$logDBH)^2))
 pred_lm=as.vector(as.matrix(trend.spatial(~Species,WEF.out))%*%lm.logDBH$coefficients)
 rmspe_lm=sqrt(mean((pred_lm-WEF.out$logDBH)^2))
 
-rmspe_spatial
-rmspe_lm
+round(rmspe_spatial,2)
+round(rmspe_lm,2)
 
 
 ### CP ###
@@ -230,7 +191,7 @@ CP_spatial=mean(CI_spatial[,1]<WEF.out$logDBH & CI_spatial[,2]>WEF.out$logDBH) #
 CIW_spatial=mean(CI_spatial[,2]-CI_spatial[,1]) ## confidence interval width ##
 
 CP_spatial
-CIW_spatial
+round(CIW_spatial,1)
 
 N=nrow(WEF.out)
 #CI_lm=pred_lm+1.96*summary(lm.logDBH)$sigma*cbind(-rep(1,N),rep(1,N))
@@ -239,7 +200,7 @@ CP_lm=mean(CI_lm[,1]<WEF.out$logDBH & CI_lm[,2]>WEF.out$logDBH)
 CIW_lm=mean(CI_lm[,2]-CI_lm[,1])
 
 CP_lm
-CIW_lm
+round(CIW_lm,1)
 
 ### kriged surface ##
 ## prediction locations ###
@@ -259,3 +220,8 @@ image.plot(predsurf, xaxs = "r", yaxs = "r", xlab="Easting (m)", ylab="Northing 
 predsdsurf <- mba.surf(cbind(WEF.pred[,c("East_m","North_m")],predsd), no.X=100, no.Y=100, h=5, m=2, extend=FALSE)$xyz.est
 dev.new()
 image.plot(predsdsurf, xaxs = "r", yaxs = "r", xlab="Easting (m)", ylab="Northing (m)", col=rev(terrain.colors(25)))
+
+dev.new()
+image.plot(predsdsurf, xaxs = "r", yaxs = "r", xlab="Easting (m)", ylab="Northing (m)", col=rev(terrain.colors(25)))
+points(WEF.pred[,1:2],col="black",pch=16,cex=0.5)
+points(WEF.pred[which(WEF.pred$Species=="GF"),1:2],col="cyan",pch=16,cex=1.2)
