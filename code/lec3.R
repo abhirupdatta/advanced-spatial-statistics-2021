@@ -9,6 +9,10 @@ library(mgcv)
 options("rgdal_show_exportToProj4_warnings"="none")
 library(rgdal)
 
+### Baltimore PM25 data
+tab=read.csv("../data/baltpm.csv")
+tab
+
 ### Baltimore boundaries and tools to plot maps
 left=-76.76
 bottom=39.18
@@ -17,9 +21,6 @@ top=39.43
 
 ### Baltimore city map
 baltmap = ggmap(get_stamenmap(bbox=c(left=left,bottom=bottom,right=right,top=top),zoom=12))
-
-tab=read.csv("../data/baltpm.csv")
-tab
 
 
 bmap=baltmap+geom_point(data=tab,
