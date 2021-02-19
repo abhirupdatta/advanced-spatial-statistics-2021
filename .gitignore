@@ -8,6 +8,10 @@
 *.so
 *.Rhistory
 
+# Rdata files #
+*.rdata
+*.Rdata
+
 # tex files #
 *.tex
 *.sty
